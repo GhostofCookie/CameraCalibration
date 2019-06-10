@@ -3,10 +3,11 @@
 
 int main(int argc, char** argv)
 {
-     Calibration* calib = new Calibration();
+     Calibration* calib = new Calibration(CalibrationType::STEREO);
 
      calib->RunCalibration();
-
+     calib->ShowRectifiedImage();
+     
      delete calib;
      return 0;
 }

@@ -3,47 +3,64 @@
 #include <opencv2/opencv.hpp>
 #include <vector>
 
-struct CalibrationSettings
+enum CalibrationType
 {
-    std::string outfile_name;
-
-    int flags = 0;
-    bool bUseCalibrated = false;
-};
-
-struct CalibrationInput
-{
-    int grid_rows;
-    int grid_cols;
-    float grid_square_size;
-    float grid_gap;
-
-    cv::Size image_size;
-    std::vector<std::string> images;
-    std::vector<std::vector<cv::Point3f>> object_points;
-    std::vector<std::vector<cv::Point2f>> image_points[2];
-};
-
-struct CalibrationResult
-{
-    cv::Mat CameraMatrix[2];
-    cv::Mat DistCoeffs[2];
-    std::vector<std::vector<cv::Point3f>> object_points;
-    cv::Mat R, T;
-    cv::Mat R1, R2, Q, P1, P2;
+    SINGLE,
+    STEREO
 };
 
 class Calibration
 {
-public:
-    Calibration();
-    ~Calibration();
+    struct CalibrationSettings
+    {
+        std::string outfile_name;
 
-    void GetImagePoints();
+        int flags = 0;
+        bool bUseCalibrated = true;
+    };
+
+    struct CalibrationInput
+    {
+        CalibrationType type;
+        cv::Size grid_size;
+        float grid_square_size;
+
+        cv::Size image_size;
+        std::vector<std::string> images[2];
+        std::vector<std::vector<cv::Point3f>> object_points;
+        std::vector<std::vector<cv::Point2f>> image_points[2];
+    };
+
+    struct CalibrationResult
+    {
+        cv::Mat CameraMatrix[2];
+        cv::Mat DistCoeffs[2];
+        cv::Mat OptimalMatrix[2];
+        int n_image_pairs;
+        std::vector<std::string> good_images;
+        std::vector<std::vector<cv::Point3f>> object_points;
+        std::vector<std::vector<cv::Point2f>> undistorted_points[2];
+
+        cv::Mat R, T;
+        cv::Mat R1, R2, Q, P1, P2, E, F;
+    };
+
+public:
+    Calibration(CalibrationType);
+
     void RunCalibration();
+    void ShowRectifiedImage();
+
+private:
+    void SingleCalibrate();
+    void StereoCalibrate();
+    void GetImagePoints();
+    void UndistortPoints();
+    void TriangulatePoints();
+    void TransformLocalToWorld();
+
 private:
     CalibrationInput input;
     CalibrationResult result;
     CalibrationSettings settings;
-
 };
