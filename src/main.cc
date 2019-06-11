@@ -4,7 +4,7 @@
 int main(int argc, char** argv)
 {
      Calibration::Settings settings;
-     settings.bUseCalibrated  = false;
+     settings.bUseCalibrated  = true;
      settings.type            = CalibrationType::STEREO;
      settings.outfile_name    = "StereoCalibration.yaml";
 
