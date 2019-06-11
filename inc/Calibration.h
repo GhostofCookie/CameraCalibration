@@ -11,17 +11,19 @@ enum CalibrationType
 
 class Calibration
 {
-    struct CalibrationSettings
+public:
+    struct Settings
     {
         std::string outfile_name;
+        CalibrationType type;
 
         int flags = 0;
-        bool bUseCalibrated = true;
+        bool bUseCalibrated = false;
     };
 
-    struct CalibrationInput
+private:
+    struct Input
     {
-        CalibrationType type;
         cv::Size grid_size;
         float grid_square_size;
 
@@ -31,7 +33,7 @@ class Calibration
         std::vector<std::vector<cv::Point2f>> image_points[2];
     };
 
-    struct CalibrationResult
+    struct Result
     {
         cv::Mat CameraMatrix[2];
         cv::Mat DistCoeffs[2];
@@ -46,7 +48,7 @@ class Calibration
     };
 
 public:
-    Calibration(CalibrationType);
+    Calibration(Settings);
 
     void RunCalibration();
     void ShowRectifiedImage();
@@ -60,7 +62,7 @@ private:
     void TransformLocalToWorld();
 
 private:
-    CalibrationInput input;
-    CalibrationResult result;
-    CalibrationSettings settings;
+    Input input;
+    Result result;
+    Settings settings;
 };

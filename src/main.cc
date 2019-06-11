@@ -3,7 +3,12 @@
 
 int main(int argc, char** argv)
 {
-     Calibration* calib = new Calibration(CalibrationType::STEREO);
+     Calibration::Settings settings;
+     settings.bUseCalibrated  = false;
+     settings.type            = CalibrationType::STEREO;
+     settings.outfile_name    = "StereoCalibration.yaml";
+
+     Calibration* calib = new Calibration(settings);
 
      calib->RunCalibration();
      calib->ShowRectifiedImage();

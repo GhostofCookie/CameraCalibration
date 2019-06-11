@@ -1,18 +1,11 @@
 #include <Calibration.h>
-
-#include <opencv2/objdetect.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/highgui.hpp>
-
-#include <cstdarg>
-
 #include <iostream>
 
 using namespace cv;
 
-Calibration::Calibration(CalibrationType type)
+Calibration::Calibration(Calibration::Settings s)
 {
-    input.type = type;
+    settings = s;
     input.grid_size = Size(19, 11);
     input.grid_square_size = 6.f;
     glob("./LeftImages/*.JPG", input.images[0], false);
@@ -58,7 +51,7 @@ void Calibration::GetImagePoints()
 
 void Calibration::RunCalibration()
 {
-    if (input.type == CalibrationType::STEREO)
+    if (settings.type == CalibrationType::STEREO)
     {
         if (settings.bUseCalibrated)
             SingleCalibrate();
@@ -131,10 +124,11 @@ void Calibration::StereoCalibrate()
     else
     {
         settings.flags |= CALIB_FIX_ASPECT_RATIO;
+        settings.flags |= CALIB_FIX_PRINCIPAL_POINT;
         settings.flags |= CALIB_ZERO_TANGENT_DIST;
-        settings.flags |= CALIB_USE_INTRINSIC_GUESS;
         settings.flags |= CALIB_SAME_FOCAL_LENGTH;
         settings.flags |= CALIB_TILTED_MODEL;
+        settings.flags |= CALIB_FIX_K2;
         settings.flags |= CALIB_FIX_K3;
         settings.flags |= CALIB_FIX_K4;
         settings.flags |= CALIB_FIX_K5;
@@ -183,6 +177,8 @@ void Calibration::StereoCalibrate()
     fs << "D1" << result.DistCoeffs[0];
     fs << "K2" << result.CameraMatrix[1];
     fs << "D2" << result.DistCoeffs[1];
+    fs << "E" << result.E;
+    fs << "F" << result.F;
     fs << "grid_size" << input.grid_size;
     fs << "grid_square_size" << input.grid_square_size;
     fs << "image_size" << input.image_size;
@@ -283,6 +279,9 @@ void Calibration::TriangulatePoints()
   
     std::cout << "  > Transforming points to world coordinates..." << std::endl;
     TransformLocalToWorld();
+
+    FileStorage fs("ObjectPoints.yaml", FileStorage::WRITE);
+    fs << "object_points" << result.object_points;
 
     std::cout << "=== Finished Triangulation ===" << std::endl;
 }
