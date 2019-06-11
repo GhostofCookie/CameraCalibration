@@ -1,3 +1,6 @@
 .vscode
 *.mp4
 *.jpg
+.DS_STORE
+*/
+*.yaml

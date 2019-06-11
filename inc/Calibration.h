@@ -11,16 +11,6 @@ enum CalibrationType
 
 class Calibration
 {
-public:
-    struct Settings
-    {
-        std::string outfile_name;
-        CalibrationType type;
-
-        int flags = 0;
-        bool bUseCalibrated = false;
-    };
-
 private:
     struct Input
     {
@@ -35,6 +25,7 @@ private:
 
     struct Result
     {
+        // Intrinsic Matrices and distance coefficients.
         cv::Mat CameraMatrix[2];
         cv::Mat DistCoeffs[2];
         cv::Mat OptimalMatrix[2];
@@ -43,12 +34,13 @@ private:
         std::vector<std::vector<cv::Point3f>> object_points;
         std::vector<std::vector<cv::Point2f>> undistorted_points[2];
 
+        // Stereo Matrices
         cv::Mat R, T;
         cv::Mat R1, R2, Q, P1, P2, E, F;
     };
 
 public:
-    Calibration(Settings);
+    Calibration(CalibrationType, std::string);
 
     void RunCalibration();
     void ShowRectifiedImage();
@@ -64,5 +56,8 @@ private:
 private:
     Input input;
     Result result;
-    Settings settings;
+    
+    std::string outfile_name;
+    CalibrationType type;
+    int flags = 0;
 };
