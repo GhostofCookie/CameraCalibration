@@ -1,20 +1,41 @@
 #include <Calibration.h>
 #include <iostream>
 
-Calibration::Calibration(CalibrationType type, std::string outfile)
+Calibration::Calibration(Input in, CalibrationType type, std::string outfile)
 {
+    for(int i = 0; i < 2; i++)
+        this->input.images[i] = in.images[i];
+
+    this->input.image_size        = in.image_size;
+    this->input.grid_size         = in.grid_size != cv::Size() ? in.grid_size : cv::Size(19, 11);
+    this->input.grid_square_size  = in.grid_square_size != 0.f ? in.grid_square_size : 6.f;
+
     this->type              = type;
     this->outfile_name      = outfile;
-    input.grid_size         = cv::Size(19, 11);
-    input.grid_square_size  = 6.f;
+    this->out_dir           = "config/";
+}
 
-    // TODO: Make this more dynamic.
-    cv::glob("./LeftImages/*.JPG", input.images[0], false);
-    cv::glob("./RightImages/*.JPG", input.images[1], false);
+void Calibration::ReadImages(std::string dir1, std::string dir2)
+{
+    cv::glob(dir1, input.images[0], false);
+    cv::glob(dir2, input.images[1], false);
+}
+
+void Calibration::RunCalibration()
+{
+    if (type == CalibrationType::STEREO)
+    {
+        SingleCalibrate();
+        StereoCalibrate();
+        UndistortPoints();
+        TriangulatePoints();
+    }
+    else SingleCalibrate();
 }
 
 void Calibration::GetImagePoints()
 {
+    std::cout << "  > Finding image points..." << std::endl;
     int k = 0;
     for (auto images : input.images)
     {
@@ -50,18 +71,6 @@ void Calibration::GetImagePoints()
     }
 }
 
-void Calibration::RunCalibration()
-{
-    if (type == CalibrationType::STEREO)
-    {
-        SingleCalibrate();
-        StereoCalibrate();
-        UndistortPoints();
-        TriangulatePoints();
-    }
-    else SingleCalibrate();
-}
-
 void Calibration::SingleCalibrate()
 {
     std::cout << "=== Starting Camera Calibration ===\n";
@@ -91,7 +100,7 @@ void Calibration::SingleCalibrate()
         double calib = calibrateCamera(input.object_points, input.image_points[i], input.image_size, result.CameraMatrix[i], result.DistCoeffs[i], rvecs, tvecs, flags);
         std::cout << "  > Calibration Result: " << calib << std::endl;
 
-        cv::FileStorage fs("calib_camera_" + std::to_string(i) + ".yaml", cv::FileStorage::WRITE);
+        cv::FileStorage fs(out_dir + "calib_camera_" + std::to_string(i) + ".yaml", cv::FileStorage::WRITE);
         fs << "K" << result.CameraMatrix[i];
         fs << "D" << result.DistCoeffs[i];
         fs << "grid_size" << input.grid_size;
@@ -157,7 +166,7 @@ void Calibration::StereoCalibrate()
                       cv::CALIB_ZERO_DISPARITY, -1, input.image_size);
 
     // Save calibration to yaml file to be used elswhere.
-    cv::FileStorage fs(outfile_name, cv::FileStorage::WRITE);
+    cv::FileStorage fs(out_dir + outfile_name, cv::FileStorage::WRITE);
     fs << "K1" << result.CameraMatrix[0];
     fs << "D1" << result.DistCoeffs[0];
     fs << "K2" << result.CameraMatrix[1];
@@ -246,7 +255,7 @@ void Calibration::TriangulatePoints()
     std::cout << "  > Transforming points to world coordinates..." << std::endl;
     TransformLocalToWorld();
 
-    cv::FileStorage fs("ObjectPoints.yaml", cv::FileStorage::WRITE);
+    cv::FileStorage fs(out_dir + "ObjectPoints.yaml", cv::FileStorage::WRITE);
     fs << "object_points" << result.object_points;
 
     std::cout << "=== Finished Triangulation ===" << std::endl;
@@ -265,6 +274,7 @@ void Calibration::TransformLocalToWorld()
         // |0 -sin cos|
         cv::Mat rot_matrix = (cv::Mat_<float>(3, 3) << 1, 0, 0, 0, cos(x_rot_radians), sin(x_rot_radians), 0, -sin(x_rot_radians), cos(x_rot_radians));
 
+        // Matrix-Vector multiplication: Rx * <x, y, z>.
         for(int i = 0; i < result.object_points.size(); i++)
             for(int j = 0; j < result.object_points[i].size(); j++)
             {

@@ -3,26 +3,27 @@
 #include <opencv2/opencv.hpp>
 #include <vector>
 
-enum CalibrationType
-{
-    SINGLE,
-    STEREO
-};
+enum CalibrationType { SINGLE, STEREO };
 
 class Calibration
 {
-private:
+public:
     struct Input
     {
+    public:
         cv::Size grid_size;
         float grid_square_size;
-
         cv::Size image_size;
         std::vector<std::string> images[2];
+
+    private:
         std::vector<std::vector<cv::Point3f>> object_points;
         std::vector<std::vector<cv::Point2f>> image_points[2];
+
+        friend Calibration;
     };
 
+private:
     struct Result
     {
         // Intrinsic Matrices and distance coefficients.
@@ -40,9 +41,10 @@ private:
     };
 
 public:
-    Calibration(CalibrationType, std::string);
+    Calibration(Input, CalibrationType, std::string);
 
     void RunCalibration();
+    void ReadImages(std::string, std::string);
     void ShowRectifiedImage();
 
 private:
@@ -53,11 +55,15 @@ private:
     void TriangulatePoints();
     void TransformLocalToWorld();
 
-private:
+public:
+    bool bRunCalibration;
     Input input;
+
+private:
     Result result;
     
     std::string outfile_name;
+    std::string out_dir;
     CalibrationType type;
     int flags = 0;
 };

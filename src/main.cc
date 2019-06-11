@@ -3,7 +3,10 @@
 
 int main(int argc, char** argv)
 {
-     Calibration* calib = new Calibration(CalibrationType::STEREO, "StereoCalibration.yaml");
+     Calibration::Input input;
+
+     Calibration* calib = new Calibration(input, CalibrationType::STEREO, "StereoCalibration.yaml");
+     calib->ReadImages("LeftImages/", "RightImages/");
 
      calib->RunCalibration();
      calib->ShowRectifiedImage();
