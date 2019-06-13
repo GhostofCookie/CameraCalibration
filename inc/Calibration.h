@@ -26,7 +26,7 @@ public:
 private:
     struct Result
     {
-        // Intrinsic Matrices and distance coefficients.
+        // Intrinsic Matrices and distortion coefficients.
         cv::Mat CameraMatrix[2];
         cv::Mat DistCoeffs[2];
         cv::Mat OptimalMatrix[2];
@@ -53,7 +53,7 @@ private:
     void GetImagePoints();
     void UndistortPoints();
     void TriangulatePoints();
-    void TransformLocalToWorld();
+    void TransformScreenToWorld();
 
 public:
     bool bRunCalibration;
