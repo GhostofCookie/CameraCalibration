@@ -10,17 +10,13 @@ class Calibration
 public:
     struct Input
     {
-    public:
         cv::Size grid_size;
         float grid_square_size;
         cv::Size image_size;
         std::vector<std::string> images[2];
 
-    private:
         std::vector<std::vector<cv::Point3f>> object_points;
         std::vector<std::vector<cv::Point2f>> image_points[2];
-
-        friend Calibration;
     };
 
 private:
@@ -41,11 +37,14 @@ private:
     };
 
 public:
-    Calibration(Input, CalibrationType, std::string);
+    Calibration(Input&, CalibrationType, std::string);
 
     void RunCalibration();
+    void ReadCalibration();
     void ReadImages(std::string, std::string);
-    void ShowRectifiedImage();
+    void GetUndistortedImage();
+    void UndistortImage(cv::Mat&, int);
+    cv::Mat CalculateDisparity(cv::Mat&, cv::Mat&);
 
 private:
     void SingleCalibrate();
@@ -53,7 +52,6 @@ private:
     void GetImagePoints();
     void UndistortPoints();
     void TriangulatePoints();
-    void TransformScreenToWorld();
 
 public:
     bool bRunCalibration;

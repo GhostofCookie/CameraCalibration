@@ -1,14 +1,26 @@
-#include <Calibration.h>
+#include "includes/Calibration.h"
+
+#include <opencv2/stereo.hpp>
+#include <opencv2/calib3d.hpp>
+#include <opencv2/tracking.hpp>
+#include <opencv2/ximgproc.hpp>
+
 #include <iostream>
 
-Calibration::Calibration(Input in, CalibrationType type, std::string outfile)
+cv::Point3f CalculateCentroid(std::vector<cv::Point3f>);
+std::vector<cv::Point3f> TranslatePoints(std::vector<cv::Point3f>, cv::Point3f);
+
+Calibration::Calibration(Input& in, CalibrationType type, std::string outfile)
 {
     for(int i = 0; i < 2; i++)
+    {
         this->input.images[i] = in.images[i];
+        this->input.image_points[i] = in.image_points[i];
+    }
 
     this->input.image_size        = in.image_size;
     this->input.grid_size         = in.grid_size != cv::Size() ? in.grid_size : cv::Size(19, 11);
-    this->input.grid_square_size  = in.grid_square_size != 0.f ? in.grid_square_size : 6.f; // mm
+    this->input.grid_square_size  = in.grid_square_size != 0.f ? in.grid_square_size : 12.1f; // mm
 
     this->type              = type;
     this->outfile_name      = outfile;
@@ -31,6 +43,38 @@ void Calibration::RunCalibration()
         TriangulatePoints();
     }
     else SingleCalibrate();
+}
+
+void Calibration::ReadCalibration()
+{
+    if(input.image_points[0].empty()) std::cout << "No left image points copied over!\n";
+    if(input.image_points[1].empty()) std::cout << "No right image points copied over!\n";
+    if(type == CalibrationType::STEREO)
+    {
+        if(!input.image_points[0].empty() &&!input.image_points[1].empty())
+            result.n_image_pairs = (input.image_points[0].size() + input.image_points[1].size()) / 2;
+        else GetImagePoints();
+        cv::FileStorage fs(out_dir + outfile_name, cv::FileStorage::READ);
+        fs["K1"] >> result.CameraMatrix[0];
+        fs["D1"] >> result.DistCoeffs[0];
+        fs["K2"] >> result.CameraMatrix[1];
+        fs["D2"] >> result.DistCoeffs[0];
+        fs["K1"] >> result.CameraMatrix[0];
+        fs["D1"] >> result.DistCoeffs[0];
+        fs["K2"] >> result.CameraMatrix[1];
+        fs["D2"] >> result.DistCoeffs[1];
+        fs["E"] >> result.E;
+        fs["F"] >> result.F;
+        fs["R"] >> result.R;
+        fs["T"] >> result.T;
+        fs["P1"] >> result.P1;
+        fs["R1"] >> result.R1;
+        fs["P2"] >> result.P2;
+        fs["R2"] >> result.R2;
+
+        UndistortPoints();
+        TriangulatePoints();
+    }
 }
 
 void Calibration::GetImagePoints()
@@ -187,21 +231,53 @@ void Calibration::StereoCalibrate()
     std::cout << "=== Finished Stereo Calibration ===" << std::endl;
 }
 
-void Calibration::ShowRectifiedImage()
+void Calibration::GetUndistortedImage()
 {   
     for (int i = 0; i < result.good_images.size(); i++)
     {
-        cv::Mat img, undist_img, rect_img;
+        cv::Mat img, undist_img;
         img = cv::imread(result.good_images[i]);
 
         if(i < result.good_images.size()/2)
-            cv::undistort(img, rect_img, result.CameraMatrix[0], result.DistCoeffs[0]);
-        else cv::undistort(img, rect_img, result.CameraMatrix[1], result.DistCoeffs[1]);
+            cv::undistort(img, undist_img, result.CameraMatrix[0], result.DistCoeffs[0]);
+        else cv::undistort(img, undist_img, result.CameraMatrix[1], result.DistCoeffs[1]);
 
-        cv::imshow("Rectified (Undistorted) Image", rect_img); 
+        cv::imshow("Rectified (Undistorted) Image", undist_img); 
         char c = cv::waitKey(0);
-        if(c=27) continue;
+        if(c==27) continue;
+    
     }
+}
+
+void Calibration::UndistortImage(cv::Mat& img, int index)
+{
+    cv::Mat uimg;
+    cv::undistort(img, uimg, result.CameraMatrix[index], result.DistCoeffs[index]);
+    img = uimg;
+}
+
+cv::Mat Calibration::CalculateDisparity(cv::Mat& left_img, cv::Mat& right_img)
+{
+    UndistortImage(left_img, 0);
+    UndistortImage(right_img, 1);
+
+    cv::Ptr<cv::StereoBM> SM = cv::StereoBM::create(160, 5);
+    cv::Mat disparity;
+
+    cv::Mat left_grey, right_grey;
+    cv::cvtColor(left_img, left_grey, cv::COLOR_BGR2GRAY);
+    cv::cvtColor(right_img, right_grey, cv::COLOR_BGR2GRAY);
+    SM->compute(left_grey, right_grey, disparity);
+
+    
+    cv::Mat D;
+    float b = 65.f; // mm
+    float f = 17.f; // mm
+
+    D = (b * f) / disparity;
+    
+    // TODO: Maybe replace with disparity.
+    return D;
 }
 
 void Calibration::UndistortPoints()
@@ -230,31 +306,28 @@ void Calibration::UndistortPoints()
 void Calibration::TriangulatePoints()
 {
     std::cout << "=== Starting Triangulation ===" << std::endl;
-    cv::Mat P1_32FC1, P2_32FC1;
     
+    cv::Mat P1_32FC1, P2_32FC1;
     result.P1.convertTo(P1_32FC1, CV_32FC1);
     result.P2.convertTo(P2_32FC1, CV_32FC1);
 
     std::cout << "  > Triangulating points..." << std::endl;
-    cv::Mat projection_points[result.n_image_pairs];
+    cv::Mat homogeneous_points[result.n_image_pairs];
     for (int i = 0; i < result.n_image_pairs; i++)
         cv::triangulatePoints(P1_32FC1, P2_32FC1,
                               result.undistorted_points[0][i],
                               result.undistorted_points[1][i],
-                              projection_points[i]);
-    // Projection:
-    // <x, y, z, w> -> <x/w, y/w, z/w> 
+                              homogeneous_points[i]);
+    
     result.object_points.resize(result.n_image_pairs);
-    for (int i = 0; i < result.n_image_pairs; i++)
-        for(int j = 0; j < result.undistorted_points[0][0].size(); j++)
-            result.object_points[i].push_back(cv::Point3f(
-                projection_points[i].at<float>(0, j) / projection_points[i].at<float>(3,j),
-                projection_points[i].at<float>(1, j) / projection_points[i].at<float>(3,j),
-                projection_points[i].at<float>(2, j) / projection_points[i].at<float>(3,j)
-            ));
-  
-    std::cout << "  > Transforming points to world coordinates..." << std::endl;
-    TransformScreenToWorld();
+    for(int i = 0; i < result.n_image_pairs; i++)
+        cv::convertPointsFromHomogeneous(homogeneous_points[i].t(), result.object_points[i]);
+
+    // TODO: Add code to check between point pairs, and get cv::norm(p1 - p2) to get distance between them.
+
+    // FIXME: Might not even need this step.
+    //for(int i = 0; i < result.n_image_pairs; i++)
+    //    result.object_points[i]  = TranslatePoints(result.object_points[i], -CalculateCentroid(result.object_points[i]));
 
     cv::FileStorage fs(out_dir + "ObjectPoints.yaml", cv::FileStorage::WRITE);
     fs << "object_points" << result.object_points;
@@ -262,66 +335,24 @@ void Calibration::TriangulatePoints()
     std::cout << "=== Finished Triangulation ===" << std::endl;
 }
 
-void Calibration::TransformScreenToWorld()
+/////////////////////////////////////////////////////////////////////////////////////////////
+// Helper Functions
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+cv::Point3f CalculateCentroid(std::vector<cv::Point3f> points)
 {
-    // Rotate to world
-    {
-        float x_rot_degrees = 0.f;
-        float x_rot_radians = x_rot_degrees * CV_PI / 180.f;
+    cv::Point3f sum;
+    for(auto p : points)
+        sum += p;
 
-        // Create a 3x3 X-Rotation matrix (Rx).
-        // |1   0   0 |
-        // |0  cos sin|
-        // |0 -sin cos|
-        cv::Mat rot_matrix = (cv::Mat_<float>(3, 3) << 1, 0, 0, 0, cos(x_rot_radians), sin(x_rot_radians), 0, -sin(x_rot_radians), cos(x_rot_radians));
+    return (sum / (int)points.size());    
+}
 
-        // Matrix-Vector multiplication: <x, y, z> * Rx.
-        for(int i = 0; i < result.object_points.size(); i++)
-            for(int j = 0; j < result.object_points[i].size(); j++)
-            {
-                // Multiply a 1x3 vector with a 3x3 matrix to obtain a 1x3 vector.
-                result.object_points[i][j] = cv::Point3f(
-                    // Multiply the first column of Rx by the vector object_points[i][j].
-                    // <x, y, z> * [X(0,0), Y(0,1), Z(0,2)]
-                    result.object_points[i][j].x * rot_matrix.at<float>(0) +
-                    result.object_points[i][j].y * rot_matrix.at<float>(3) +
-                    result.object_points[i][j].z * rot_matrix.at<float>(6),
+std::vector<cv::Point3f> TranslatePoints(std::vector<cv::Point3f> points, cv::Point3f point)
+{
+    std::vector<cv::Point3f> result(points.size());
+    for(int i = 0 ; i < points.size(); i++)
+        result[i] = points[i] + point;
 
-                    // Multiply the second column of Rx by the vector object_points[i][j].
-                    // <x, y, z> * [X(1,0), Y(1,1), Z(1,2)]
-                    result.object_points[i][j].x * rot_matrix.at<float>(1) +
-                    result.object_points[i][j].y * rot_matrix.at<float>(4) +
-                    result.object_points[i][j].z * rot_matrix.at<float>(7),
-
-                    // Multiply the last column of Rx by the vector object_points[i][j].
-                    // <x, y, z> * [X(2,0), Y(2,1), Z(2,2)]
-                    result.object_points[i][j].x * rot_matrix.at<float>(2) +
-                    result.object_points[i][j].y * rot_matrix.at<float>(4) +
-                    result.object_points[i][j].z * rot_matrix.at<float>(8)
-                );
-            }
-    }
-
-    // TODO: Not convinced this does what we think it does. Needs revision.
-    // Translate to world.
-    {
-        cv::Point3f offset(
-            result.object_points[0][0].x,
-            result.object_points[0][0].y,
-            result.object_points[0][0].z);
-
-        /*
-        cv::Point3f translation(
-            result.CameraMatrix[0].at<float>(0, 0),
-            result.CameraMatrix[0].at<float>(1, 1),
-            result.CameraMatrix[0].at<float>(2, 2));
-        */
-        for (int i = 0; i < result.object_points.size(); i++)
-            for(int j = 0; j < result.object_points[i].size(); j++)
-                result.object_points[i][j] = cv::Point3f(
-                    result.object_points[i][j].x - offset.x, // + translation.x,
-                    result.object_points[i][j].y - offset.y, // + translation.y,
-                    result.object_points[i][j].z - offset.z  // + translation.z
-                );
-    }
+    return result;
 }
