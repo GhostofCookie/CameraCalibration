@@ -20,7 +20,7 @@ Calibration::Calibration(Input& in, CalibrationType type, std::string outfile)
 
     this->input.image_size        = in.image_size;
     this->input.grid_size         = in.grid_size != cv::Size() ? in.grid_size : cv::Size(19, 11);
-    this->input.grid_square_size  = in.grid_square_size != 0.f ? in.grid_square_size : 12.1f; // mm
+    this->input.grid_dot_size     = in.grid_dot_size != 0.f ? in.grid_dot_size : 12.1f; // mm
 
     this->type              = type;
     this->outfile_name      = outfile;
@@ -98,7 +98,7 @@ void Calibration::GetImagePoints()
                 std::vector<cv::Point3f> objs;
                 for (int i = 0; i < input.grid_size.height; i++)
                     for (int j = 0; j < input.grid_size.width; j++)
-                        objs.push_back(cv::Point3f((float)j * input.grid_square_size, (float)i * input.grid_square_size, 0));
+                        objs.push_back(cv::Point3f((float)j * input.grid_dot_size, (float)i * input.grid_dot_size, 0));
 
                 input.image_points[k].push_back(buffer);
                 if (input.object_points.size() != input.image_points[0].size())
@@ -150,7 +150,7 @@ void Calibration::SingleCalibrate()
         fs << "K" << result.CameraMatrix[i];
         fs << "D" << result.DistCoeffs[i];
         fs << "grid_size" << input.grid_size;
-        fs << "grid_square_size" << input.grid_square_size;
+        fs << "grid_dot_size" << input.grid_dot_size;
         fs << "resolution" << input.image_size;
         std::cout << "  > Finished Camera " << std::to_string(i) << " calibration\n";
 
@@ -166,18 +166,7 @@ void Calibration::StereoCalibrate()
 
     flags = 0;
     flags |= cv::CALIB_FIX_INTRINSIC;
-    /*    
-    {
-        flags |= CALIB_FIX_ASPECT_RATIO;
-        flags |= CALIB_FIX_PRINCIPAL_POINT;
-        flags |= CALIB_ZERO_TANGENT_DIST;
-        flags |= CALIB_SAME_FOCAL_LENGTH;
-        flags |= CALIB_FIX_K3;
-        flags |= CALIB_FIX_K4;
-        flags |= CALIB_FIX_K5;
-        flags |= CALIB_USE_INTRINSIC_GUESS;
-    } 
-    */
+    flags |= cv::CALIB_SAME_FOCAL_LENGTH;
 
     double rms = cv::stereoCalibrate(input.object_points,
                                      input.image_points[0],
@@ -226,14 +215,14 @@ void Calibration::StereoCalibrate()
     fs << "P2" << result.P2;
     fs << "R2" << result.R2;
     fs << "grid_size" << input.grid_size;
-    fs << "grid_square_size" << input.grid_square_size;
+    fs << "grid_dot_size" << input.grid_dot_size;
     fs << "image_size" << input.image_size;
     std::cout << "=== Finished Stereo Calibration ===" << std::endl;
 }
 
 void Calibration::GetUndistortedImage()
 {   
-    for (int i = 0; i < result.good_images.size(); i++)
+    for (size_t i = 0; i < result.good_images.size(); i++)
     {
         cv::Mat img, undist_img;
         img = cv::imread(result.good_images[i]);
@@ -315,8 +304,8 @@ void Calibration::TriangulatePoints()
     cv::Mat homogeneous_points[result.n_image_pairs];
     for (int i = 0; i < result.n_image_pairs; i++)
         cv::triangulatePoints(P1_32FC1, P2_32FC1,
-                              result.undistorted_points[0][i],
-                              result.undistorted_points[1][i],
+                              result.undistorted_points[0][i], // Left
+                              result.undistorted_points[1][i], // Right
                               homogeneous_points[i]);
     
     result.object_points.resize(result.n_image_pairs);

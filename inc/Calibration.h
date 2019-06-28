@@ -11,7 +11,7 @@ public:
     struct Input
     {
         cv::Size grid_size;
-        float grid_square_size;
+        float grid_dot_size;
         cv::Size image_size;
         std::vector<std::string> images[2];
 
