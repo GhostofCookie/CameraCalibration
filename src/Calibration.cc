@@ -340,7 +340,7 @@ cv::Point3f CalculateCentroid(std::vector<cv::Point3f> points)
 std::vector<cv::Point3f> TranslatePoints(std::vector<cv::Point3f> points, cv::Point3f point)
 {
     std::vector<cv::Point3f> result(points.size());
-    for(int i = 0 ; i < points.size(); i++)
+    for(size_t i = 0 ; i < points.size(); i++)
         result[i] = points[i] + point;
 
     return result;
