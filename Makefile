@@ -1,5 +1,5 @@
 SRC_DIR 	:= src/
-INC_DIR 	:= inc/
+INC_DIR 	:= src/includes/
 BIN_DIR 	:= bin/
 
 CC			:= g++

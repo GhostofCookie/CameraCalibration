@@ -4,12 +4,12 @@
 int main(int argc, char** argv)
 {
      Calibration::Input input;
+     input.image_size = cv::Size(1920, 1440);
 
      Calibration* calib = new Calibration(input, CalibrationType::STEREO, "StereoCalibration.yaml");
-     calib->ReadImages("Hero7-1/", "Hero7-2/");
-
-     //calib->RunCalibration();
-     calib->ReadCalibration();
+     
+     calib->ReadImages(argv[1], argv[2]);
+     calib->RunCalibration();
      calib->GetUndistortedImage();
      
      delete calib;
